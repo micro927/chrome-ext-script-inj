@@ -62,7 +62,14 @@ After changing the extension's files, click the reload icon on its card in `chro
    - **Script Name**: e.g., "Dark Mode"
    - **Script Code**: Paste your JavaScript code
    - **Auto-fire**: Check if you want it to run automatically on matching pages
+   - **Run in page context**: Leave unchecked unless the script needs the page's own JavaScript (see below)
 4. Click **"Save Script"**
+
+### Page context
+
+By default a script runs in an isolated world: it can read and change the page (DOM, styles, elements) but the page's own JavaScript can't see it, and it can't see the page's variables or functions.
+
+Check **"Run in page context"** only when the script needs those (for example `window.someAppObject` or the site's jQuery). Sites can detect code running there, so login, Microsoft Office and captcha-protected sites may flag the browser as automated. Scripts running in page context show a **PAGE** label.
 
 ### Running Scripts
 
@@ -89,15 +96,15 @@ github.com/*           → Matches github.com, github.com/user, github.com/user/
 www.ohmy.*            → Matches www.ohmy.com, www.ohmy.co.uk, www.ohmy.co.nz, etc.
 localhost:3000        → Matches localhost:3000 and every path on it
 example.com/api/*     → Matches example.com/api/, example.com/api/users, etc.
-*.github.io/*         → Matches anything.github.io and all paths
-https://site.com/a/*  → Patterns with a scheme are used as-is (here: https only)
+*.github.io/*         → Matches github.io, anything.github.io and all paths
+https://site.com/a/*  → Patterns with a scheme keep it (here: https only)
 ```
 
 Rules:
 - Patterns without a scheme match both `http://` and `https://`
-- `*` matches any characters, `?` matches exactly one character
-- Patterns are **prefix** matches: `example.com` also matches `example.com/anything`
-- The query string counts as part of the URL
+- A host with no wildcard, or starting with `*.`, matches only that site (and its subdomains for `*.`)
+- A host with any other wildcard (`www.ohmy.*`) is compared as text against the full URL, where `*` matches any characters (including `/` and the query string), and `?` matches exactly one character
+- Paths are **prefix** matches: `example.com` also matches `example.com/anything`
 
 ---
 

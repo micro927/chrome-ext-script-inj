@@ -380,6 +380,13 @@
         </label>
       </div>
 
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="scriptPageContext"> Run in page context
+        </label>
+        <div class="script-meta">Only if the script needs the page's own JavaScript (its variables or functions). Sites can detect scripts running there, which can trigger captchas or blocked content.</div>
+      </div>
+
       <div class="form-actions">
         <button class="btn btn-success" id="saveScriptBtn">Save Script</button>
         <button class="btn" id="cancelScriptBtn" style="background: #999;">Cancel</button>

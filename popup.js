@@ -138,11 +138,12 @@ function renderContent(group) {
       const autoLabel = script.autoFire
         ? '<span class="inline-label auto">AUTO</span>'
         : '<span class="inline-label manual">MANUAL</span>';
+      const pageLabel = script.pageContext ? '<span class="inline-label">PAGE</span>' : '';
 
       html += `
         <div class="script-item">
           <div class="script-header">
-            <div class="script-name">${escapeHtml(script.name)} ${autoLabel}</div>
+            <div class="script-name">${escapeHtml(script.name)} ${autoLabel}${pageLabel}</div>
             <div class="script-controls">
               <input type="checkbox" class="toggle-checkbox" title="Enable / disable this script"
                      ${script.enabled !== false ? 'checked' : ''}
@@ -251,6 +252,7 @@ function openAddScriptModal(groupId) {
   document.getElementById('scriptName').value = '';
   document.getElementById('scriptCode').value = '';
   document.getElementById('scriptAutoFire').checked = false;
+  document.getElementById('scriptPageContext').checked = false;
   document.getElementById('saveScriptBtn').dataset.groupId = groupId;
   document.getElementById('saveScriptBtn').dataset.scriptId = '';
   document.getElementById('scriptModal').classList.add('active');
@@ -268,6 +270,7 @@ function openEditScriptModal(groupId, scriptId) {
   document.getElementById('scriptName').value = script.name;
   document.getElementById('scriptCode').value = script.code;
   document.getElementById('scriptAutoFire').checked = script.autoFire || false;
+  document.getElementById('scriptPageContext').checked = script.pageContext || false;
   document.getElementById('saveScriptBtn').dataset.groupId = groupId;
   document.getElementById('saveScriptBtn').dataset.scriptId = scriptId;
   document.getElementById('scriptModal').classList.add('active');
@@ -281,6 +284,7 @@ function saveScript() {
   const name = document.getElementById('scriptName').value.trim();
   const code = document.getElementById('scriptCode').value.trim();
   const autoFire = document.getElementById('scriptAutoFire').checked;
+  const pageContext = document.getElementById('scriptPageContext').checked;
   const groupId = document.getElementById('saveScriptBtn').dataset.groupId;
   const scriptId = document.getElementById('saveScriptBtn').dataset.scriptId;
 
@@ -305,6 +309,7 @@ function saveScript() {
       script.name = name;
       script.code = code;
       script.autoFire = autoFire;
+      script.pageContext = pageContext;
     }
   } else {
     // Create new
@@ -313,6 +318,7 @@ function saveScript() {
       name: name,
       code: code,
       autoFire: autoFire,
+      pageContext: pageContext,
       enabled: true
     });
   }
@@ -361,7 +367,7 @@ function runScriptManually(groupId, scriptId) {
       const results = await chrome.userScripts.execute({
         target: { tabId: tabs[0].id },
         js: [{ code: script.code }],
-        world: 'MAIN'
+        world: script.pageContext ? 'MAIN' : 'USER_SCRIPT'
       });
       const error = results && results[0] && results[0].error;
       if (error) {

@@ -72,23 +72,26 @@ async function syncUserScripts() {
   groups.forEach(group => {
     if (group.enabled === false) return;
 
-    const includeGlobs = (group.websites || []).flatMap(patternToGlobs);
-    if (includeGlobs.length === 0) return;
+    const targets = (group.websites || []).map(patternToTarget).filter(Boolean);
+    if (targets.length === 0) return;
 
     (group.scripts || []).forEach(script => {
       if (script.enabled === false || !script.autoFire || !script.code) return;
 
-      userScripts.push({
-        id: `${group.id}::${script.id}`,
-        matches: ['<all_urls>'],
-        includeGlobs,
-        js: [
-          // Separate entry so the log still prints if the user code has a syntax error
-          { code: `console.log("[Script Injector] Auto-firing:", ${JSON.stringify(script.name)});` },
-          { code: script.code }
-        ],
-        runAt: 'document_end',
-        world: 'MAIN'
+      // One registration per pattern: matches and includeGlobs are ANDed, so
+      // patterns can't share a registration without narrowing each other.
+      targets.forEach((target, i) => {
+        userScripts.push({
+          id: `${group.id}::${script.id}::${i}`,
+          ...target,
+          js: [
+            // Separate entry so the log still prints if the user code has a syntax error
+            { code: `console.log("[Script Injector] Auto-firing:", ${JSON.stringify(script.name)});` },
+            { code: script.code }
+          ],
+          runAt: 'document_end',
+          world: scriptWorld(script)
+        });
       });
     });
   });
@@ -106,19 +109,47 @@ async function syncUserScripts() {
   }
 }
 
-// Convert a website pattern into URL globs (matched against the full URL).
-// Examples:
-//   "github.com/*"   -> http(s)://github.com/*
-//   "www.ohmy.*"     -> http(s)://www.ohmy.*   (www.ohmy.com, www.ohmy.co.uk, ...)
-//   "localhost:3000" -> http(s)://localhost:3000*
-// Patterns are prefix matches, as before. A pattern that already has a scheme is used as-is.
-function patternToGlobs(pattern) {
-  const p = pattern.trim();
-  if (!p) return [];
+// Scripts run in an isolated world by default: they share the page's DOM but are
+// invisible to its JavaScript. Running in the page's own world ('MAIN') lets bot and
+// tamper checks (Microsoft login/Office, captcha providers) see the injected code.
+function scriptWorld(script) {
+  return script.pageContext ? 'MAIN' : 'USER_SCRIPT';
+}
 
-  const withWildcardEnd = p.endsWith('*') ? p : `${p}*`;
-  if (p.includes('://')) return [withWildcardEnd];
-  return [`http://${withWildcardEnd}`, `https://${withWildcardEnd}`];
+// Convert a website pattern into where a script may run ({ matches, includeGlobs }).
+// A plain host, or one starting with "*.", becomes a Chrome match pattern, so the
+// wildcard can only match subdomains. (In a URL glob, "*" matches any text, so
+// "*.github.io/*" would also match any URL with ".github.io/" in its query string.)
+// Examples:
+//   "github.com/*"   -> matches github.com, any path
+//   "*.github.io/*"  -> matches github.io and its subdomains, any path
+//   "localhost:3000" -> matches localhost, glob pins port 3000
+//   "www.ohmy.*"     -> no match pattern can express this: glob http(s)://www.ohmy.*
+// Paths are prefix matches, as before. A pattern that already has a scheme keeps it.
+function patternToTarget(pattern) {
+  const p = pattern.trim();
+  if (!p) return null;
+
+  const schemeMatch = p.match(/^([a-z]+):\/\//i);
+  const rest = schemeMatch ? p.slice(schemeMatch[0].length) : p;
+  const schemes = schemeMatch ? [schemeMatch[1].toLowerCase()] : ['http', 'https'];
+  const globs = schemes.map(s => `${s}://${rest.endsWith('*') ? rest : `${rest}*`}`);
+
+  const slash = rest.indexOf('/');
+  const hostPort = slash === -1 ? rest : rest.slice(0, slash);
+  const path = slash === -1 ? '' : rest.slice(slash);
+  const hostMatch = hostPort.match(/^((?:\*\.)?[a-z0-9.-]+)(:\d+)?$/i);
+  const webSchemes = schemes.every(s => s === 'http' || s === 'https');
+
+  if (!hostMatch || !webSchemes) {
+    return { matches: ['<all_urls>'], includeGlobs: globs };
+  }
+
+  const target = { matches: schemes.map(s => `${s}://${hostMatch[1].toLowerCase()}/*`) };
+  // Match patterns ignore ports and can't express a path prefix, so the glob narrows those
+  const pathIsAny = path === '' || path === '/' || path === '/*';
+  if (hostMatch[2] || !pathIsAny) target.includeGlobs = globs;
+  return target;
 }
 
 // Recommended check from the Chrome docs: accessing chrome.userScripts throws
